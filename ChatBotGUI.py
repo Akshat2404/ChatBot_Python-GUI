@@ -1,0 +1,134 @@
+# Python ChatBot  
+# using Deep Learning Models 
+# with Python GUI
+
+# Importing modules
+from tkinter import *
+import time
+from sklearn import manifold
+import torch
+from numpy import *
+import random
+import json
+from model import NeuralNet
+from nltk_utils import bag_of_words, tokenize
+
+# Width and Height of the ChatBot Box
+width=500
+height=600
+
+# Main GUI Window
+root=Tk()
+root.configure(bg='#F0FFFF')
+
+# Title of the ChatBot
+root.title("Akshat's ChatBot")
+
+# Setting the Dimensions of the ChatBot
+root.geometry(f'{width}x{height}')
+root.minsize(width, height)
+root.maxsize(width, height)
+
+# Heading of the ChatBot
+heading = Label(
+            root, 
+            text="Akshat's ChatBot", 
+            font='comicsansms 20 bold', 
+            fg='white', 
+            bg='#1E90FF', 
+            padx=1000, 
+            pady=10,
+        ).pack(side=TOP, anchor=N)
+
+global sentence
+sentence=''
+
+myScrollBar=Scrollbar(root, orient=VERTICAL)
+myScrollBar.pack(side=RIGHT, fill=Y)
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+with open("D://CSE//Python//ChatBot//ChatBot//intents.json", 'r') as json_data:
+    intents = json.load(json_data)
+
+FILE = "D://CSE//Python//ChatBot//ChatBot//Data.pth"
+data = torch.load(FILE)
+
+input_size = data["input_size"]
+hidden_size = data["hidden_size"]
+output_size = data["output_size"]
+all_words = data['all_words']
+tags = data['tags']
+model_state = data["model_state"]
+
+model = NeuralNet(input_size, hidden_size, output_size).to(device)
+model.load_state_dict(model_state)
+model.eval()
+
+def getResponse(sentence):
+    if sentence == "quit":
+        return ''
+
+    sentence = tokenize(sentence)
+    X = bag_of_words(sentence, all_words)
+    X = X.reshape(1, X.shape[0])
+    X = torch.from_numpy(X).to(device)
+
+    output = model(X)
+    _, predicted = torch.max(output, dim=1)
+
+    tag = tags[predicted.item()]
+
+    probs = torch.softmax(output, dim=1)
+    prob = probs[0][predicted.item()]
+    if prob.item() > 0.75:
+        for intent in intents['intents']:
+            if tag == intent["tag"]:
+                return str(random.choice(intent['responses']))
+    else:
+        return str("I do not understand...")
+
+
+def createLabel(f):
+    global sentence
+    bot_response=getResponse(sentence)
+    Label(f, text=username+' \U0001F600', padx=12, pady=10, bg='white', fg='#00008B').pack(side=LEFT, anchor=W)
+    Label(f, text=sentence, padx=10, pady=10, bg='#BDEDFF', fg='#357EC7', font=('lucida', 12)).pack(side=LEFT, anchor=SW, fill=X)
+    new_f=Frame(root, bg='#F0FFFF')
+    new_f.pack(fill=X, side=TOP)
+    Label(new_f, text=bot_name+' \U0001F916', padx=14, pady=10, bg='white', fg='#00008B').pack(side=LEFT, anchor=W)
+    Label(new_f, text=bot_response, padx=10, pady=10, bg='#F0FFFF', fg='#357EC7', font=('lucida', 12)).pack(side=LEFT, anchor=W, fill=X)
+
+def sendText():
+    global userInput
+    global sentence
+    sentence = userInput.get(1.0, END)
+    userInput.delete(1.0, END)
+    print(sentence)
+    if sentence=='quit':
+        time.sleep(3)
+        quit()
+    frame=Frame(root, bg='#BDEDFF')
+    frame.pack(fill=X, side=TOP)
+    createLabel(frame)
+
+bot_name='Bot'
+username='You'
+
+# userText=StringVar()
+# userText.set('')
+
+
+
+f=Frame(root)
+f.pack(side=BOTTOM)
+scrollbar_userinput=Scrollbar(f)
+scrollbar_userinput.pack(side=RIGHT, fill=Y)
+b=Button(f, text='\U0001F680', command=sendText, height=1, width=4, font=('', 22), bg='#1E90FF', fg='#FFFFFF')
+b.pack(side=RIGHT, anchor=W)
+userInput=Text(f, relief=SUNKEN, font=(('lucida console', 20)), height=2, yscrollcommand=scrollbar_userinput.set)
+userInput.pack(side=BOTTOM) # fill=X
+scrollbar_userinput.config(command=userInput.yview)
+
+
+root.mainloop()
